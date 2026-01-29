@@ -60,6 +60,29 @@ body {
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
+#music-toggle {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#music-toggle:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+#music-toggle.muted {
+    opacity: 0.5;
+}
+
 #pokemon-selector {
     display: flex;
     gap: 10px;
@@ -239,6 +262,18 @@ body {
 
 .pokemon-card[data-pokemon="snorlax"] {
     background: linear-gradient(145deg, #A8A878, #8A8A5C);
+}
+
+.pokemon-card[data-pokemon="machinegun"] {
+    background: linear-gradient(145deg, #606060, #404040);
+}
+
+.pokemon-card[data-pokemon="machinegun"] .pokemon-name {
+    color: #fff;
+}
+
+.pokemon-card[data-pokemon="machinegun"] .pokemon-cost {
+    color: #ccc;
 }
 
 /* Responsive */

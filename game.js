@@ -1,3 +1,155 @@
+// ==================== BACKGROUND MUSIC ====================
+class MusicPlayer {
+    constructor() {
+        this.audioContext = null;
+        this.isPlaying = false;
+        this.masterGain = null;
+        this.scheduledTime = 0;
+        this.tempo = 120;
+        this.beatDuration = 60 / this.tempo;
+        this.loopInterval = null;
+
+        // Music patterns (pentatonic scale for pleasant sound)
+        this.bassPattern = [0, 0, 7, 5, 0, 0, 7, 3]; // C, C, G, F, C, C, G, E
+        this.melodyPattern = [12, 14, 16, 14, 12, 9, 7, 9]; // Higher octave
+        this.baseFreq = 130.81; // C3
+    }
+
+    init() {
+        if (this.audioContext) return;
+
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.masterGain = this.audioContext.createGain();
+        this.masterGain.gain.value = 0.3;
+        this.masterGain.connect(this.audioContext.destination);
+    }
+
+    noteToFreq(semitones) {
+        return this.baseFreq * Math.pow(2, semitones / 12);
+    }
+
+    playNote(freq, startTime, duration, type = 'square', gain = 0.3) {
+        const osc = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        osc.type = type;
+        osc.frequency.value = freq;
+
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(gain, startTime + 0.01);
+        gainNode.gain.setValueAtTime(gain, startTime + duration * 0.7);
+        gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+
+        osc.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        osc.start(startTime);
+        osc.stop(startTime + duration);
+    }
+
+    playDrum(startTime, type = 'kick') {
+        const osc = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        if (type === 'kick') {
+            osc.frequency.setValueAtTime(150, startTime);
+            osc.frequency.exponentialRampToValueAtTime(50, startTime + 0.1);
+            gainNode.gain.setValueAtTime(0.5, startTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
+        } else if (type === 'hihat') {
+            // Use noise-like high frequency
+            osc.type = 'square';
+            osc.frequency.value = 800;
+            gainNode.gain.setValueAtTime(0.1, startTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.05);
+        }
+
+        osc.connect(gainNode);
+        gainNode.connect(this.masterGain);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.3);
+    }
+
+    scheduleBar() {
+        const currentTime = this.audioContext.currentTime;
+        if (this.scheduledTime < currentTime) {
+            this.scheduledTime = currentTime;
+        }
+
+        for (let i = 0; i < 8; i++) {
+            const beatTime = this.scheduledTime + i * this.beatDuration;
+
+            // Bass line
+            const bassNote = this.bassPattern[i];
+            this.playNote(this.noteToFreq(bassNote), beatTime, this.beatDuration * 0.8, 'triangle', 0.4);
+
+            // Melody (every other beat)
+            if (i % 2 === 0) {
+                const melodyNote = this.melodyPattern[i];
+                this.playNote(this.noteToFreq(melodyNote), beatTime, this.beatDuration * 0.5, 'square', 0.15);
+            }
+
+            // Drums
+            if (i % 2 === 0) {
+                this.playDrum(beatTime, 'kick');
+            }
+            this.playDrum(beatTime, 'hihat');
+        }
+
+        this.scheduledTime += 8 * this.beatDuration;
+    }
+
+    start() {
+        if (this.isPlaying) return;
+
+        this.init();
+
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+        }
+
+        this.isPlaying = true;
+        this.scheduledTime = this.audioContext.currentTime;
+
+        // Schedule first bar immediately
+        this.scheduleBar();
+
+        // Schedule subsequent bars
+        this.loopInterval = setInterval(() => {
+            if (this.isPlaying) {
+                this.scheduleBar();
+            }
+        }, 8 * this.beatDuration * 1000 * 0.8); // Schedule slightly ahead
+    }
+
+    stop() {
+        this.isPlaying = false;
+        if (this.loopInterval) {
+            clearInterval(this.loopInterval);
+            this.loopInterval = null;
+        }
+    }
+
+    toggle() {
+        if (this.isPlaying) {
+            this.stop();
+        } else {
+            this.start();
+        }
+        return this.isPlaying;
+    }
+
+    setVolume(value) {
+        if (this.masterGain) {
+            this.masterGain.gain.value = value;
+        }
+    }
+}
+
+// Global music player instance
+const musicPlayer = new MusicPlayer();
+
 // ==================== GAME CONFIGURATION ====================
 const CONFIG = {
     GRID_ROWS: 5,
@@ -78,6 +230,19 @@ const POKEMON_DATA = {
         color: '#A8A878',
         type: 'tank',
         description: '高血量坦克'
+    },
+    machinegun: {
+        name: '机枪手',
+        cost: 200,
+        health: 80,
+        damage: 8,
+        attackSpeed: 200, // Very fast attack speed
+        projectileSpeed: 10,
+        icon: '🔫',
+        color: '#505050',
+        projectileColor: '#FFD700',
+        type: 'attacker',
+        description: '超高射速攻击'
     }
 };
 
@@ -523,6 +688,17 @@ class Projectile {
             ctx.beginPath();
             ctx.arc(3, -3, 3, 0, Math.PI * 2);
             ctx.fill();
+        } else if (this.sourceType === 'machinegun') {
+            // Bullet trail
+            ctx.fillStyle = '#FFF';
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Spark effect
+            ctx.fillStyle = '#FF0';
+            ctx.beginPath();
+            ctx.arc(-8, 0, 2, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         ctx.restore();
@@ -636,6 +812,14 @@ class Game {
 
         // Start button
         document.getElementById('start-button').addEventListener('click', () => this.startGame());
+
+        // Music toggle
+        document.getElementById('music-toggle').addEventListener('click', () => {
+            const isPlaying = musicPlayer.toggle();
+            const btn = document.getElementById('music-toggle');
+            btn.textContent = isPlaying ? '🔊' : '🔇';
+            btn.classList.toggle('muted', !isPlaying);
+        });
     }
 
     selectPokemon(card) {
@@ -781,6 +965,9 @@ class Game {
         this.updateEnergyDisplay();
         this.updatePokemonCardStates();
         document.getElementById('wave-number').textContent = this.state.wave;
+
+        // Start background music
+        musicPlayer.start();
     }
 
     showOverlay(title, message, buttonText) {
@@ -797,12 +984,14 @@ class Game {
     gameOver() {
         this.state.isRunning = false;
         this.state.isGameOver = true;
+        musicPlayer.stop();
         this.showOverlay('游戏结束！', `僵尸突破了防线！你坚持到了第 ${this.state.wave} 波`, '重新开始');
     }
 
     victory() {
         this.state.isRunning = false;
         this.state.isVictory = true;
+        musicPlayer.stop();
         this.showOverlay('胜利！', '恭喜你成功抵御了所有僵尸的进攻！', '再玩一次');
     }
 
